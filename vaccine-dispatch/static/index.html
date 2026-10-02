@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>疫苗调拨台</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f4f8; color: #1f2933; }
+  header { background: #0b5fa5; color: #fff; padding: 14px 24px; display: flex; align-items: baseline; gap: 14px; }
+  header h1 { font-size: 20px; }
+  header span { font-size: 13px; opacity: .85; }
+  nav { background: #fff; border-bottom: 1px solid #d9e2ec; padding: 0 24px; display: flex; gap: 4px; }
+  nav button { border: none; background: none; padding: 12px 18px; font-size: 15px; cursor: pointer; color: #52606d; border-bottom: 3px solid transparent; }
+  nav button.active { color: #0b5fa5; border-bottom-color: #0b5fa5; font-weight: 600; }
+  main { max-width: 1180px; margin: 20px auto; padding: 0 16px; }
+  section { display: none; }
+  section.active { display: block; }
+  .card { background: #fff; border: 1px solid #d9e2ec; border-radius: 8px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 16px; margin-bottom: 12px; color: #0b5fa5; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e4ebf2; text-align: left; vertical-align: top; }
+  th { background: #f5f8fb; color: #52606d; font-weight: 600; white-space: nowrap; }
+  tr.expired td { color: #9aa5b1; text-decoration: line-through; }
+  select, input[type=number], input[type=text] { padding: 7px 9px; border: 1px solid #bcccdc; border-radius: 6px; font-size: 14px; }
+  button.btn { background: #0b5fa5; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  button.btn:hover { background: #094e88; }
+  button.btn.small { padding: 4px 10px; font-size: 13px; }
+  button.btn.ghost { background: #fff; color: #0b5fa5; border: 1px solid #0b5fa5; }
+  .form-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .form-row label { font-size: 14px; color: #52606d; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
+  .b-pending { background: #fff3c4; color: #8d6b00; }
+  .b-transit { background: #cbe7ff; color: #0b5fa5; }
+  .b-signed  { background: #c6f7d4; color: #1c7a35; }
+  .b-void    { background: #ffd9d9; color: #b42318; }
+  .shortage { color: #b42318; font-weight: 600; }
+  .ok-text  { color: #1c7a35; font-weight: 600; }
+  .muted { color: #7b8794; font-size: 12px; }
+  .temp-bad { color: #b42318; font-weight: 700; }
+  #toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); padding: 10px 22px; border-radius: 8px; font-size: 14px; display: none; z-index: 9; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+  #toast.ok { background: #1c7a35; color: #fff; }
+  #toast.err { background: #b42318; color: #fff; }
+  .boxes { display: flex; gap: 12px; flex-wrap: wrap; }
+  .box-card { border: 1px solid #d9e2ec; border-radius: 8px; padding: 10px 16px; background: #f5f8fb; font-size: 14px; }
+  .box-card b { color: #0b5fa5; }
+  .result { margin-top: 14px; padding: 12px 16px; border-radius: 8px; background: #f5f8fb; border: 1px solid #d9e2ec; font-size: 14px; display: none; }
+  .result ul { margin: 6px 0 0 20px; }
+</style>
+</head>
+<body>
+<header><h1>疫苗调拨台</h1><span>疾控中心 · 冷链疫苗调拨管理（冷链 2–8°C）</span></header>
+<nav>
+  <button data-tab="req" class="active">领用申请</button>
+  <button data-tab="dispatch">调拨单</button>
+  <button data-tab="stock">库存与冷藏箱</button>
+  <button data-tab="disposal">处置记录</button>
+</nav>
+<main>
+  <section id="tab-req" class="active">
+    <div class="card">
+      <h2>接种点提交领用</h2>
+      <div class="form-row">
+        <label>接种点 <select id="req-site"></select></label>
+        <label>疫苗 <select id="req-vaccine"></select></label>
+        <label>数量（支） <input type="number" id="req-qty" min="1" value="100" style="width:110px"></label>
+        <button class="btn" onclick="submitReq()">提交领用</button>
+      </div>
+      <p class="muted" style="margin-top:8px">提交后系统立即按效期“先到期先出库”锁定批次；库存不足时只锁现有部分并提示缺口。</p>
+      <div class="result" id="req-result"></div>
+    </div>
+  </section>
+
+  <section id="tab-dispatch">
+    <div class="card">
+      <h2>调拨单 <button class="btn ghost small" style="float:right" onclick="refreshAll()">刷新</button></h2>
+      <table>
+        <thead><tr>
+          <th>单号</th><th>接种点</th><th>疫苗</th><th>申请/实发/缺口</th><th>批次（效期）</th>
+          <th>冷藏箱</th><th>温度记录</th><th>状态</th><th>操作</th>
+        </tr></thead>
+        <tbody id="dispatch-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-stock">
+    <div class="card">
+      <h2>冷藏箱限装</h2>
+      <div class="boxes" id="box-list"></div>
+    </div>
+    <div class="card">
+      <h2>库存批次（按效期排序，先到期先出库）</h2>
+      <table>
+        <thead><tr><th>疫苗</th><th>批次号</th><th>效期</th><th>库存（支）</th><th>备注</th></tr></thead>
+        <tbody id="stock-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-disposal">
+    <div class="card">
+      <h2>处置记录（温度超标作废）</h2>
+      <table>
+        <thead><tr><th>时间</th><th>调拨单</th><th>接种点</th><th>疫苗 / 批次</th><th>数量</th><th>原因</th><th>处置结果</th></tr></thead>
+        <tbody id="disposal-body"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+let BOOT = null;
+
+const api = async (url, opts) => {
+  const r = await fetch(url, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || '请求失败');
+  return data;
+};
+const post = (url, body) => api(url, {
+  method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})
+});
+
+function toast(msg, ok) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = ok ? 'ok' : 'err';
+  t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.display = 'none', 3200);
+}
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('main section').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+  refreshAll();
+});
+
+async function refreshAll() {
+  BOOT = await api('/api/bootstrap');
+  fillSelects();
+  renderBoxes();
+  await Promise.all([renderDispatches(), renderStock(), renderDisposals()]);
+}
+
+function fillSelects() {
+  document.getElementById('req-site').innerHTML =
+    BOOT.sites.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  document.getElementById('req-vaccine').innerHTML =
+    BOOT.vaccines.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+}
+
+async function submitReq() {
+  const site_id = +document.getElementById('req-site').value;
+  const vaccine_id = +document.getElementById('req-vaccine').value;
+  const quantity = +document.getElementById('req-qty').value;
+  try {
+    const r = await post('/api/requisitions', {site_id, vaccine_id, quantity});
+    const div = document.getElementById('req-result');
+    let html = `<b>${r.site}</b> 申领 <b>${r.vaccine}</b> ${r.requested} 支：`;
+    if (r.allocated > 0) {
+      html += `<div class="ok-text">已锁定 ${r.allocated} 支（调拨单 #${r.dispatch_id}），批次如下：</div><ul>` +
+        r.items.map(i => `<li>批次 ${i.batch_no}（效期 ${i.expiry_date}）× ${i.quantity} 支</li>`).join('') + '</ul>';
+    } else {
+      html += `<div class="shortage">库存为 0，本次未能锁定任何批次。</div>`;
+    }
+    if (r.shortage > 0) {
+      html += `<div class="shortage" style="margin-top:6px">还差 ${r.shortage} 支，库存不足，待补货后可再次申领。</div>`;
+    }
+    div.innerHTML = html;
+    div.style.display = 'block';
+    toast('领用提交成功', true);
+    renderStock(); renderDispatches();
+  } catch (e) { toast(e.message, false); }
+}
+
+function badge(status) {
+  const cls = {'待放行':'b-pending','运输中':'b-transit','已签收':'b-signed','已作废':'b-void'}[status] || '';
+  return `<span class="badge ${cls}">${status}</span>`;
+}
+
+async function renderDispatches() {
+  const list = await api('/api/dispatches');
+  const tb = document.getElementById('dispatch-body');
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="9" class="muted">暂无调拨单</td></tr>'; return; }
+  tb.innerHTML = list.map(d => {
+    const items = d.items.map(i => `批次 ${i.batch_no}（效期 ${i.expiry_date}）× ${i.quantity}`).join('<br>') || '—';
+    const temps = d.temperatures.length
+      ? d.temperatures.map(t => `<span class="${t.excursion ? 'temp-bad' : ''}">${t.temperature}°C</span> <span class="muted">${t.recorded_at.slice(5,16)}</span>`).join('<br>')
+      : '<span class="muted">—</span>';
+    let boxCell, ops;
+    if (d.status === '待放行') {
+      const opts = BOOT.cold_boxes.map(b => {
+        const fit = b.capacity >= d.allocated_qty;
+        return `<option value="${b.id}" ${fit ? '' : 'disabled'}>${b.name}（限装${b.capacity}${fit ? '' : '，装不下'}）</option>`;
+      }).join('');
+      boxCell = `<select id="box-${d.id}">${opts}</select>`;
+      ops = `<button class="btn small" onclick="releaseOrder(${d.id})">放行</button>`;
+    } else {
+      boxCell = d.box_name ? `${d.box_name}<br><span class="muted">限装 ${d.box_capacity}</span>` : '—';
+      if (d.status === '运输中') {
+        ops = `<input type="text" id="temp-${d.id}" placeholder="°C" style="width:64px">
+               <button class="btn small ghost" onclick="addTemp(${d.id})">登记温度</button><br>
+               <button class="btn small" style="margin-top:4px" onclick="signOrder(${d.id})">签收</button>`;
+      } else if (d.status === '已作废') {
+        ops = `<span class="shortage">不可签收</span><br><span class="muted">${d.void_reason || ''}</span>`;
+      } else {
+        ops = `<span class="muted">签收于 ${d.signed_at || ''}</span>`;
+      }
+    }
+    const shortage = d.shortage_qty > 0 ? `<br><span class="shortage">差 ${d.shortage_qty}</span>` : '';
+    return `<tr>
+      <td>#${d.id}<br><span class="muted">${d.created_at.slice(5,16)}</span></td>
+      <td>${d.site}</td><td>${d.vaccine}</td>
+      <td>${d.requested_qty} / ${d.allocated_qty}${shortage}</td>
+      <td>${items}</td><td>${boxCell}</td><td>${temps}</td>
+      <td>${badge(d.status)}</td><td>${ops}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function releaseOrder(id) {
+  const cold_box_id = +document.getElementById('box-' + id).value;
+  try {
+    await post(`/api/dispatches/${id}/release`, {cold_box_id});
+    toast(`调拨单 #${id} 已放行`, true);
+    refreshAll();
+  } catch (e) { toast(e.message, false); }
+}
+
+async function addTemp(id) {
+  const temperature = document.getElementById('temp-' + id).value;
+  try {
+    const r = await post(`/api/dispatches/${id}/temperature`, {temperature});
+    if (r.voided) {
+      toast(`温度超标！调拨单 #${id} 已自动作废并退回库存`, false);
+    } else {
+      toast(`温度 ${temperature}°C 正常，已记录`, true);
+    }
+    refreshAll();
+  } catch (e) { toast(e.message, false); }
+}
+
+async function signOrder(id) {
+  try {
+    await post(`/api/dispatches/${id}/sign`);
+    toast(`调拨单 #${id} 签收完成`, true);
+    refreshAll();
+  } catch (e) { toast(e.message, false); }
+}
+
+async function renderStock() {
+  const rows = await api('/api/inventory');
+  document.getElementById('stock-body').innerHTML = rows.map(r =>
+    `<tr class="${r.expired ? 'expired' : ''}">
+      <td>${r.vaccine}</td><td>${r.batch_no}</td><td>${r.expiry_date}</td><td>${r.quantity}</td>
+      <td>${r.expired ? '已过期，不参与出库' : (r.quantity === 0 ? '已用完' : '')}</td>
+    </tr>`).join('');
+}
+
+function renderBoxes() {
+  document.getElementById('box-list').innerHTML = BOOT.cold_boxes.map(b =>
+    `<div class="box-card"><b>${b.name}</b>　限装 <b>${b.capacity}</b> 支</div>`).join('');
+}
+
+async function renderDisposals() {
+  const rows = await api('/api/disposals');
+  const tb = document.getElementById('disposal-body');
+  if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="muted">暂无处置记录</td></tr>'; return; }
+  tb.innerHTML = rows.map(r =>
+    `<tr>
+      <td>${r.created_at}</td><td>#${r.dispatch_id}</td><td>${r.site}</td>
+      <td>${r.vaccine} / ${r.batch_no}<br><span class="muted">效期 ${r.expiry_date}</span></td>
+      <td>${r.quantity} 支</td><td>${r.reason}</td><td>${r.detail}</td>
+    </tr>`).join('');
+}
+
+refreshAll();
+</script>
+</body>
+</html>
