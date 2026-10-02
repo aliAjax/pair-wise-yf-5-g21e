@@ -1,0 +1,13 @@
+{
+  "name": "vaccine-dispatch",
+  "version": "1.0.0",
+  "description": "疫苗调拨台 - 领用抢占 / 效期先出 / 冷藏箱限装 / 温度超标作废退回",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2"
+  }
+}

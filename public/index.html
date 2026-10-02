@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>疫苗调拨台</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>疫苗调拨台</h1>
+    <div class="topbar-sub">
+      疾控疫苗调拨 · 领用抢占 · 效期先出(FEFO) · 冷藏箱限装 · 温度超标自动作废退回
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="stock">库存批次</button>
+    <button class="tab" data-tab="requisition">领用调拨</button>
+    <button class="tab" data-tab="shipment">冷藏发运</button>
+    <button class="tab" data-tab="disposal">处置记录</button>
+  </nav>
+
+  <main>
+    <!-- 库存批次 -->
+    <section id="tab-stock" class="panel active">
+      <div class="card">
+        <h2>入库（新增批次）</h2>
+        <form id="form-batch" class="form-inline">
+          <label>疫苗
+            <select name="vaccineId" id="batch-vaccine"></select>
+          </label>
+          <label>批次号 <input name="batchNo" placeholder="如 Y2027-D04" required /></label>
+          <label>效期 <input name="expiryDate" type="date" required /></label>
+          <label>数量 <input name="quantity" type="number" min="1" placeholder="支/份" required /></label>
+          <button type="submit" class="btn primary">入库</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>批次库存（按效期先到期排列）</h2>
+        <table class="table">
+          <thead>
+            <tr><th>疫苗</th><th>批次号</th><th>效期</th><th>入库</th><th>可用</th><th>状态</th></tr>
+          </thead>
+          <tbody id="batches-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 领用调拨 -->
+    <section id="tab-requisition" class="panel">
+      <div class="card">
+        <h2>接种点提交领用（提交即领取批次）</h2>
+        <form id="form-claim" class="form-inline">
+          <label>接种点 <select name="siteId" id="claim-site"></select></label>
+          <label>疫苗 <select name="vaccineId" id="claim-vaccine"></select></label>
+          <label>数量 <input name="quantityRequested" type="number" min="1" value="50" required /></label>
+          <button type="submit" class="btn primary">提交领用</button>
+        </form>
+        <div class="demo-row">
+          <button id="btn-demo-concurrent" class="btn warn">演示：两个接种点同时领用（脊灰疫苗）</button>
+          <span class="hint">库存不足时，先提交的领取成功，后提交的显示“还差多少”。</span>
+        </div>
+        <div id="claim-result" class="result-box"></div>
+      </div>
+      <div class="card">
+        <h2>领用单</h2>
+        <table class="table">
+          <thead>
+            <tr><th>单号</th><th>接种点</th><th>疫苗</th><th>申请</th><th>已领</th><th>还差</th><th>领取批次(FEFO)</th><th>状态</th><th>时间</th></tr>
+          </thead>
+          <tbody id="requisitions-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 冷藏发运 -->
+    <section id="tab-shipment" class="panel">
+      <div class="card">
+        <h2>冷藏箱（限装数量）</h2>
+        <table class="table">
+          <thead><tr><th>冷藏箱</th><th>限装</th><th>当前在途已装</th><th>剩余可装</th></tr></thead>
+          <tbody id="boxes-body"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>调拨出库（选择冷藏箱，超出限装不予放行）</h2>
+        <form id="form-ship" class="form-inline">
+          <label>领用单
+            <select name="requisitionId" id="ship-requisition"></select>
+          </label>
+          <label>冷藏箱
+            <select name="coldBoxId" id="ship-box"></select>
+          </label>
+          <button type="submit" class="btn primary">放行发运</button>
+        </form>
+        <div id="ship-result" class="result-box"></div>
+      </div>
+      <div class="card">
+        <h2>在途发运（温度记录 / 签收）</h2>
+        <div id="shipments-list"></div>
+      </div>
+    </section>
+
+    <!-- 处置记录 -->
+    <section id="tab-disposal" class="panel">
+      <div class="card">
+        <h2>处置记录（温度超标作废并退回库存，刷新页面仍可查询）</h2>
+        <table class="table">
+          <thead>
+            <tr><th>处置时间</th><th>接种点</th><th>疫苗</th><th>批次号</th><th>数量</th><th>原因</th><th>处置动作</th><th>发运单</th></tr>
+          </thead>
+          <tbody id="disposals-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
